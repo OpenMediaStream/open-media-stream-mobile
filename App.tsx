@@ -1,27 +1,52 @@
 // The following packages need to be installed using the following commands:
-// expo install expo-camera
-// expo install expo-media-library
-// expo install expo-sharing
-// expo install expo-av
+// npm install expo-camera
+// npm install expo-media-library
+// npm install expo-sharing
+// npm install expo-av
+// pip install tensorflowjs
+//npm i @tensorflow/tfjs
+//npm i @tensorflow-models/coco-ssd
+//npm i --legacy-per-deps @tensorflow/tfjs-react-native
+//npm i --legacy-per-deps expo-camera
+//npm i @tensorflow/tfjs-converter --legacy-peer-deps
+//npm i @tensorflow/tfjs-core --legacy-peer-deps
+//npm i react-native-fs --legacy-peer-deps
+//npm i @tensorflow/tfjs-backend-cpu --legacy-peer-deps
+//npm i @tensorflow/tfjs-backend-webgl --legacy-peer-deps
+//npm i expo-gl --legacy-peer-deps
+//npm i @react-native-async-storage/async-storage --legacy-peer-deps
+//npm i @tensorflow/tfjs-layers --legacy-peer-deps
 
-import { StyleSheet, Text, View, Button, SafeAreaView } from 'react-native';
+import { cameraWithTensors } from '@tensorflow/tfjs-react-native';
+import { StyleSheet, Text, View, Button, SafeAreaView, Platform } from 'react-native';
 import { useEffect, useState, useRef } from 'react';
 import { Camera } from 'expo-camera';
 import { Video } from 'expo-av';
 import { shareAsync } from 'expo-sharing';
 import * as MediaLibrary from 'expo-media-library';
+import * as tf from '@tensorflow/tfjs';
+import * as cocoSsd from '@tensorflow-models/coco-ssd';
+
 
 
 export default function App() {
   // ======== Criaçao dos Estados e Referencias ======== //
   let cameraRef = useRef(); // Referencia a camera
+  const TensorCamera = cameraWithTensors(Camera); // Referencia a camera com tensores
   const [hasCameraPermission, setHasCameraPermission] = useState(); // Estado para permissao da camera
   const [hasMicrophonePermission, setHasMicrophonePermission] = useState(); // Estado para permissao do microfone 
   const [hasMediaLibraryPermission, setHasMediaLibraryPermission] = useState(); // Estado para permissao da biblioteca 
   const [isRecording, setIsRecording] = useState(false); // Estado para saber se esta gravando ou nao. O valor inicial eh False
   const [video, setVideo] = useState();
-  // ================================ //
+  const [model, setModel] = useState<cocoSsd.ObjectDetection>();
+  const [predictions, setPredictions] = useState([]);
+  const [isTfReady, setIsTfReady] = useState(false);
+  const canvasRef = useRef(null);
+  
 
+
+  // ================================ //
+  let textureDims = Platform.OS == 'ios' ? { width: 1920, height: 1080 } : { width: 1200, height: 1600 };
 
   // ======== Requisiçoes ======== //
   useEffect(() => { // Devolve uma funçao limpa
@@ -33,12 +58,32 @@ export default function App() {
       setHasCameraPermission(cameraPermission.status === "granted"); // "Seta" hasCameraPermission para True caso cameraPermission.status for igual a 'granted'
       setHasMicrophonePermission(microphonePermission.status === "granted"); // "Seta" hasMicrophonePermission para True caso microphonePermission.status for igual a 'granted'
       setHasMediaLibraryPermission(mediaLibraryPermission.status === "granted"); // "Seta" hasMediaLibraryPermission para True caso mediaLibraryPermission.status for igual a 'granted'
+      await tf.ready();
+      setModel(await cocoSsd.load());
     })();
   }, []);
   // ================================ //
 
+  function handleCameraStream(images : any) {
+    const loop = async () => {
+      const nextImageTensor = await images.next().value;
+      if (nextImageTensor) {
+        const nextImageTensor = await images.next().value;
+        const flipHorizontal = Platform.OS === 'ios' ? false : true;
+        const image = await cameraTensorRef.current.capture();
+        const predictions = await model.detect(image);  
+        setPredictions(predictions);
+        requestAnimationFrame(loop);
+      }
+    }
+    loop();
+  }
 
 
+  
+
+
+  
   if (hasCameraPermission === undefined || hasMicrophonePermission === undefined) { // Enquanto o pop-up estiver na tela , esse texto estara na tela
     return <Text>Requestion permissions...</Text>
   } else if (!hasCameraPermission) { // Caso a permissao da camera for negada
