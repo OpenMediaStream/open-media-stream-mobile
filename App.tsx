@@ -22,7 +22,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Dimensions, LogBox, Platform, StyleSheet, Text, View } from 'react-native';
 import { bundleResourceIO, cameraWithTensors } from '@tensorflow/tfjs-react-native';
 import * as tf from '@tensorflow/tfjs';
-import * as cocoSsd from '@tensorflow-models/coco-ssd';
+//import * as cocoSsd from '@tensorflow-models/coco-ssd';
 import React, { useEffect, useState, useRef, Component } from 'react';
 import { Camera } from 'expo-camera';
 import Canvas from 'react-native-canvas';
@@ -36,10 +36,25 @@ LogBox.ignoreAllLogs(true);
 
 
 export default function App() {
-  const [model, setModel] = useState<cocoSsd.DetectedObject>();
+  const [model, setModel] = useState();
   let context = useRef<CanvasRenderingContext2D>();
   let canvas = useRef<Canvas>();
+  const modelJSON = require('./assets/models-otherway/model.json');
+  const modelWeights = require('./assets/models-otherway/group1-shard.bin');
 
+  const loadModel = async()=>{
+    //.ts: const loadModel = async ():Promise<void|tf.LayersModel>=>{
+        const model = await tf.loadGraphModel(
+            bundleResourceIO(modelJSON, modelWeights)
+        ).then((model)=>{
+          console.log("[LOADING SUCCESS] model:",model);
+          setModel(model);
+        }
+        ).catch((e)=>{
+          console.log("[LOADING ERROR] info:",e)
+        })
+        return model
+    }
 
   let textureDims;
   if (Platform.OS === 'ios') {
@@ -54,16 +69,16 @@ export default function App() {
     };
   }
 
-  async function loadModel(){
-    try{
-      const model = await cocoSsd.load();
-      setModel(model);
-      console.log('Model loaded');
-    }catch(error){
-      console.log(error);
-      console.log('failed load model')
-    }
-  }
+  // async function loadModel(){
+  //   try{
+  //     const model = await tf.loadLayersModel(bundleResourceIO(modelJSON, modelWeights))
+  //     setModel(model);
+  //     console.log('Model loaded');
+  //   }catch(error){
+  //     console.log(error);
+  //     console.log('failed load model')
+  //   }
+  // }
   
   
   async function handleCameraStream(images: any) {
@@ -71,7 +86,7 @@ export default function App() {
       const nextImageTensor = images.next().value;
       if (!model || !nextImageTensor) 
         throw new Error('No model or image tensor');
-      model.detect(nextImageTensor).then((prediction: cocoSsd.ObjectDetection[]) => {
+      model.detect(nextImageTensor).then((prediction: model.ObjectDetection[]) => {
         drawRectangle(prediction, nextImageTensor);
         })
         .catch((error: any) => {
@@ -82,7 +97,7 @@ export default function App() {
     loop();
   }
 
-  function drawRectangle(predictions: cocoSsd.ObjectDetection[], nextImageTensor: any) {
+  function drawRectangle(predictions: model.ObjectDetection[], nextImageTensor: any) {
     if (!context.current || !canvas.current) return;
 
     // match the size of camera preview
@@ -136,18 +151,20 @@ export default function App() {
     (async () => {
       const { status } = await Camera.requestCameraPermissionsAsync();
       await tf.ready().then(() => {
-        loadModel();
+        const model = loadModel();
+        
+        
       });
     })();
   }, []);
 
-  if(!model){
-    return (
-      <View style={styles.loading}>
-        <Text style={styles.loading_text}>Loading...</Text>
-      </View>
-    )
-  }
+  // if(!model){
+  //   return (
+  //     <View style={styles.loading}>
+  //       <Text style={styles.loading_text}>Loading...</Text>
+  //     </View>
+  //   )
+  // }
   return (
     <View style={styles.container}>
       <TensorCamera style={styles.camera}
